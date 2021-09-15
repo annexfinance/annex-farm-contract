@@ -47,13 +47,6 @@ contract AnnexFarm is Ownable {
         uint256 lastRewardBlock; // Last block number that ANNs distribution occurs.
         uint256 accAnnexPerShare; // Accumulated ANNs per share, times 1e12. See below.
     }
-    struct PoolInfoWithSupply {
-        IERC20 lpToken; // Address of LP token contract.
-        uint256 lpSupply; // Total LP token amount supplied.
-        uint256 allocPoint; // How many allocation points assigned to this pool. ANNs to distribute per block.
-        uint256 lastRewardBlock; // Last block number that ANNs distribution occurs.
-        uint256 accAnnexPerShare; // Accumulated ANNs per share, times 1e12. See below.
-    }
     // The Annex TOKEN!
     address public annex;
     // Dev address.
@@ -100,7 +93,7 @@ contract AnnexFarm is Ownable {
         return poolInfo.length;
     }
 
-    function poolInfo(uint _pid) external view returns (PoolInfoWithSupply) {
+    function getPoolInfo(uint _pid) external view returns (IERC20 lpToken, uint256 lpSupply, uint256 allocPoint, uint256 lastRewardBlock, uint accAnnexperShare) {
         PoolInfo storage pool = poolInfo[_pid];
         uint256 amount;
         if (annex == address(pool.lpToken)) {
@@ -108,13 +101,13 @@ contract AnnexFarm is Ownable {
         } else {
             amount = pool.lpToken.balanceOf(address(this));
         }
-        return PoolInfoWithSupply({
-            lpToken: pool.lpToken,
-            lpSupply: amount,
-            allocPoint: pool.allocPoint,
-            lastRewardBlock: pool.lastRewardBlock,
-            accAnnexPerShare: pool.accAnnexPerShare
-        });
+        return (
+            pool.lpToken,
+            amount,
+            pool.allocPoint,
+            pool.lastRewardBlock,
+            pool.accAnnexPerShare
+        );
     }
 
     // Add a new lp to the pool. Can only be called by the owner.
