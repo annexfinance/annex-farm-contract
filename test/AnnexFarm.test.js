@@ -334,7 +334,11 @@ describe("AnnexFarm", function() {
       await this.chef.updatePool(0)
       await time.advanceBlockTo("709")
 
+      expect(await this.annex.balanceOf(this.chef.address)).to.equal("17300")
+      expect((await this.chef.getPoolInfo(0)).lpSupply).to.equal("100")
+
       await this.chef.connect(this.vaulter).deposit(0, "0", { from: this.vaulter.address })
+
       expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("10900")
 
       expect(await this.annex.totalSupply()).to.equal("1000000000000000000000000000")

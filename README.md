@@ -1,6 +1,6 @@
 # Annex Farm
 
-<https://farm.annex.finance>.
+<https://farm.annex.finance>
 
 ## Deployed Contracts
 

@@ -14,19 +14,6 @@ import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-interface IMigratorChef {
-    // Perform LP token migration from legacy AnnexswapV2 to AnnexFarm.
-    // Take the current LP token address and return the new LP token address.
-    // Migrator should have full access to the caller's LP token.
-    // Return the new LP token address.
-    //
-    // XXX Migrator must have allowance access to AnnexswapV2 LP tokens.
-    // AnnexFarm must mint EXACTLY the same amount of Annexswap LP tokens or
-    // else something bad will happen. Traditional AnnexswapV2 does not
-    // do that so be careful!
-    function migrate(IERC20 token) external returns (IERC20);
-}
-
 // AnnexFarm is the master of Farm.
 //
 // Note that it's ownable and the owner wields tremendous power. The ownership
@@ -56,7 +43,6 @@ contract AnnexFarm is Ownable {
     // Info of each pool.
     struct PoolInfo {
         IERC20 lpToken; // Address of LP token contract.
-        uint256 totalAmount; // Total LP token amount deposited.
         uint256 allocPoint; // How many allocation points assigned to this pool. ANNs to distribute per block.
         uint256 lastRewardBlock; // Last block number that ANNs distribution occurs.
         uint256 accAnnexPerShare; // Accumulated ANNs per share, times 1e12. See below.
@@ -71,10 +57,10 @@ contract AnnexFarm is Ownable {
     uint256 public annexPerBlock;
     // Bonus muliplier for early annex makers.
     uint256 public constant BONUS_MULTIPLIER = 10;
-    // The migrator contract. It has a lot of power. Can only be set through governance (owner).
-    IMigratorChef public migrator;
     // Info of each pool.
-    PoolInfo[] public poolInfo;
+    PoolInfo[] private poolInfo;
+    // Total ANN amount deposited in ANN single pool. To reduce tx-fee, not included in struct PoolInfo.
+    uint256 private lpSupplyOfAnnPool;
     // Info of each user that stakes LP tokens.
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
@@ -107,6 +93,23 @@ contract AnnexFarm is Ownable {
         return poolInfo.length;
     }
 
+    function getPoolInfo(uint _pid) external view returns (IERC20 lpToken, uint256 lpSupply, uint256 allocPoint, uint256 lastRewardBlock, uint accAnnexperShare) {
+        PoolInfo storage pool = poolInfo[_pid];
+        uint256 amount;
+        if (annex == address(pool.lpToken)) {
+            amount = lpSupplyOfAnnPool;
+        } else {
+            amount = pool.lpToken.balanceOf(address(this));
+        }
+        return (
+            pool.lpToken,
+            amount,
+            pool.allocPoint,
+            pool.lastRewardBlock,
+            pool.accAnnexPerShare
+        );
+    }
+
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
     function add(
@@ -123,7 +126,6 @@ contract AnnexFarm is Ownable {
         poolInfo.push(
             PoolInfo({
                 lpToken: _lpToken,
-                totalAmount: 0,
                 allocPoint: _allocPoint,
                 lastRewardBlock: lastRewardBlock,
                 accAnnexPerShare: 0
@@ -152,23 +154,6 @@ contract AnnexFarm is Ownable {
     ) public onlyOwner {
         annexPerBlock = speed;
     }
-    
-    // Set the migrator contract. Can only be called by the owner.
-    // function setMigrator(IMigratorChef _migrator) public onlyOwner {
-    //     migrator = _migrator;
-    // }
-
-    // Migrate lp token to another lp contract. Can be called by anyone. We trust that migrator contract is good.
-    // function migrate(uint256 _pid) public {
-    //     require(address(migrator) != address(0), "migrate: no migrator");
-    //     PoolInfo storage pool = poolInfo[_pid];
-    //     IERC20 lpToken = pool.lpToken;
-    //     uint256 bal = lpToken.balanceOf(address(this));
-    //     lpToken.safeApprove(address(migrator), bal);
-    //     IERC20 newLpToken = migrator.migrate(lpToken);
-    //     require(bal == newLpToken.balanceOf(address(this)), "migrate: bad");
-    //     pool.lpToken = newLpToken;
-    // }
 
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to)
@@ -197,8 +182,12 @@ contract AnnexFarm is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accAnnexPerShare = pool.accAnnexPerShare;
-        // uint256 lpSupply = pool.lpToken.balanceOf(address(this));
-        uint256 lpSupply = pool.totalAmount;
+        uint256 lpSupply;
+        if (annex == address(pool.lpToken)) {
+            lpSupply = lpSupplyOfAnnPool;
+        } else {
+            lpSupply = pool.lpToken.balanceOf(address(this));
+        }
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 multiplier =
                 getMultiplier(pool.lastRewardBlock, block.number);
@@ -227,8 +216,12 @@ contract AnnexFarm is Ownable {
         if (block.number <= pool.lastRewardBlock) {
             return;
         }
-        // uint256 lpSupply = pool.lpToken.balanceOf(address(this));
-        uint256 lpSupply = pool.totalAmount;
+        uint256 lpSupply;
+        if (annex == address(pool.lpToken)) {
+            lpSupply = lpSupplyOfAnnPool;
+        } else {
+            lpSupply = pool.lpToken.balanceOf(address(this));
+        }
         if (lpSupply == 0) {
             pool.lastRewardBlock = block.number;
             return;
@@ -262,8 +255,8 @@ contract AnnexFarm is Ownable {
             address(this),
             _amount
         );
-        if (_amount > 0) {
-            pool.totalAmount = pool.totalAmount.add(_amount);
+        if (annex == address(pool.lpToken)) {
+            lpSupplyOfAnnPool = lpSupplyOfAnnPool.add(_amount);
         }
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accAnnexPerShare).div(1e12);
@@ -283,7 +276,9 @@ contract AnnexFarm is Ownable {
         safeAnnexTransfer(msg.sender, pending);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accAnnexPerShare).div(1e12);
-        pool.totalAmount = pool.totalAmount.sub(_amount);
+        if (annex == address(pool.lpToken)) {
+            lpSupplyOfAnnPool = lpSupplyOfAnnPool.sub(_amount);
+        }
         pool.lpToken.safeTransfer(address(msg.sender), _amount);
         emit Withdraw(msg.sender, _pid, _amount);
     }
@@ -300,9 +295,17 @@ contract AnnexFarm is Ownable {
 
     // Safe annex transfer function, just in case if rounding error causes pool to not have enough ANNs.
     function safeAnnexTransfer(address _to, uint256 _amount) internal {
-        uint256 annexBal = IERC20(annex).balanceOf(address(this));
-        if (_amount > annexBal) {
-            IERC20(annex).transfer(_to, annexBal);
+        uint256 annexAvailableBal = IERC20(annex).balanceOf(address(this));
+        
+        // Protect users liquidity
+        if (annexAvailableBal > lpSupplyOfAnnPool) {
+            annexAvailableBal = annexAvailableBal - lpSupplyOfAnnPool;
+        } else {
+            annexAvailableBal = 0;
+        }
+
+        if (_amount > annexAvailableBal) {
+            IERC20(annex).transfer(_to, annexAvailableBal);
         } else {
             IERC20(annex).transfer(_to, _amount);
         }
