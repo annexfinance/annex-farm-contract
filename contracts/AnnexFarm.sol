@@ -298,11 +298,6 @@ contract AnnexFarm is Ownable {
         user.rewardDebt = 0;
     }
 
-    // Grant pool rewards by governance proposal. Can only be called by the owner.
-    function grantPoolReward(address to, uint256 amount) public onlyOwner {
-        safeAnnexTransfer(to, amount);
-    }
-
     // Safe annex transfer function, just in case if rounding error causes pool to not have enough ANNs.
     function safeAnnexTransfer(address _to, uint256 _amount) internal {
         uint256 annexBal = IERC20(annex).balanceOf(address(this));
