@@ -127,9 +127,6 @@ describe("AnnexFarm", function() {
       await this.chef.connect(this.bob).deposit(0, "0", { from: this.bob.address }) // block 101
       expect(await this.annex.balanceOf(this.bob.address)).to.equal("1000")
 
-      await this.chef.grantPoolReward(this.carol.address, "2000")
-      expect(await this.annex.balanceOf(this.carol.address)).to.equal("2000")
-
       await time.advanceBlockTo("104")
       await this.chef.connect(this.bob).deposit(0, "0", { from: this.bob.address }) // block 105
 
@@ -318,23 +315,20 @@ describe("AnnexFarm", function() {
       await this.chef.connect(this.vaulter).deposit(0, "0", { from: this.vaulter.address }) // block 701
       expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("1900")
 
-      await this.chef.grantPoolReward(this.carol.address, "2000")
-      expect(await this.annex.balanceOf(this.carol.address)).to.equal("2000")
-
       await this.chef.connect(this.vaulter).withdraw(0, "100", { from: this.vaulter.address }) // block 701
-      expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("4000")
+      expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("3000")
       await time.advanceBlockTo("704")
       await this.chef.connect(this.vaulter).deposit(0, "0", { from: this.vaulter.address }) // block 705
 
-      expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("4000")
-      expect(await this.annex.balanceOf(this.dev.address)).to.equal("300")
-      expect(await this.annex.balanceOf(this.chef.address)).to.equal("14700")
+      expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("3000")
+      expect(await this.annex.balanceOf(this.dev.address)).to.equal("200")
+      expect(await this.annex.balanceOf(this.chef.address)).to.equal("17800")
 
       // Vaulter deposit 100 LP
       await this.chef.connect(this.vaulter).deposit(0, "100", { from: this.vaulter.address })
       await time.advanceBlockTo("707")
       expect(await this.chef.pendingAnnex(0, this.vaulter.address)).to.equal("1000")
-      expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("3900")
+      expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("2900")
 
       await this.chef.setAnnexPerBlock("200")
       await this.chef.updatePool(0)
@@ -348,6 +342,7 @@ describe("AnnexFarm", function() {
       expect(await this.annex.balanceOf(this.chef.address)).to.equal("100")
 
       await this.chef.connect(this.vaulter).deposit(0, "0", { from: this.vaulter.address })
+
       expect(await this.annex.balanceOf(this.vaulter.address)).to.equal("3900")
 
       expect(await this.annex.totalSupply()).to.equal("1000000000000000000000000000")
